@@ -30,63 +30,67 @@ import pypylon
 #imageFiles = sorted(glob.glob("Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/OTF.07.08.22/*.jpg"),key=len)
 
 from pypylon import pylon
+import platform
 
-# conecting to the first available camera
-camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+num_img_to_save = 5
+img = pylon.PylonImage()
 
-# Grabing Continusely (video) with minimal delay
-camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly) 
-converter = pylon.ImageFormatConverter()
+tlf = pylon.TlFactory.GetInstance()
+tl = tlf.CreateTl('BaslerGigE')
+cam_info = tl.CreateDeviceInfo()
+cam_info.SetIpAddress('192.168.3.3')
+cam = pylon.InstantCamera(tlf.CreateDevice(cam_info))
 
-# converting to opencv bgr format
-converter.OutputPixelFormat = pylon.PixelType_BGR8packed
-converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
+cam.Open()
+#cam.ExposureAuto.SetValue(cam.ExposureAuto.Continuous)
+cam.StartGrabbing()
+for i in range(num_img_to_save):
+    with cam.RetrieveResult(2000) as result:
 
-while camera.IsGrabbing():
-    grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+        
+        # Calling AttachGrabResultBuffer creates another reference to the
+        # grab result buffer. This prevents the buffer's reuse for grabbing.
+        img.AttachGrabResultBuffer(result)
 
-    if grabResult.GrabSucceeded():
-        # Access the image data
-        image = converter.Convert(grabResult)
-        img = image.GetArray()
-        cv2.namedWindow('title', cv2.WINDOW_NORMAL)
-        cv2.imshow('title', img)
-        k = cv2.waitKey(1)
-        if k == 27:
-            break
-    grabResult.Release()
-    
-# Releasing the resource    
-camera.StopGrabbing()
+        if platform.system() == 'Windows':
+            # The JPEG format that is used here supports adjusting the image
+            # quality (100 -> best quality, 0 -> poor quality).
+            ipo = pylon.ImagePersistenceOptions()
+            quality = 90 - i * 10
+            ipo.SetQuality(quality)
 
-cv2.destroyAllWindows()
+            filename = "saved_pypylon_img_%d.jpeg" % quality
+            img.Save(pylon.ImageFileFormat_Jpeg, filename, ipo)
+        else:
+            filename = "saved_pypylon_img_%d.png" % i
+            img.Save(pylon.ImageFileFormat_Png, filename)
 
+        # In order to make it possible to reuse the grab result for grabbing
+        # again, we have to release the image (effectively emptying the
+        # image object).
+        img.Release()
 
-for i in range(len(imageFiles)):
-  print(i, ",", imageFiles[i])
-iFile = int(input("Enter file number:"))
-imageFile = imageFiles[iFile]
-print(imageFile)
-
+cam.StopGrabbing()
+cam.Close()
 
 #reading in selected file
-img =imread(imageFile, as_gray = True)
+img =imread(filename, as_gray = True)
 
 
 plt.imshow(img, cmap = plt.cm.gray)
 
 #splitting color bands
-hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
-lower_blue = np.array([40,80,0])
-upper_blue = np.array([222,222,255])
-mask = cv2.inRange(hsv, lower_blue, upper_blue)
-result = cv2.bitwise_and(img,img, mask=mask)
-r= cv2.split(result)
-g = cv2.split(result)
-b = cv2.split(result)
-r= cv2.split(img)
-g = cv2.split(img)
-b = cv2.split(img)
+# hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+# lower_blue = np.array([40,80,0])
+# upper_blue = np.array([222,222,255])
+# mask = cv2.inRange(hsv, lower_blue, upper_blue)
+# result = cv2.bitwise_and(img,img, mask=mask)
+# r= cv2.split(result)
+# g = cv2.split(result)
+# b = cv2.split(result)
+# r= cv2.split(img)
+# g = cv2.split(img)
+# b = cv2.split(img)
 
 w = img.shape
 h=img.shape
