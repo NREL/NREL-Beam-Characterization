@@ -1,31 +1,80 @@
-import argparse
+# ===============================================================================
+#    This sample illustrates how to grab and process images using the CInstantCamera class.
+#    The images are grabbed and processed asynchronously, i.e.,
+#    while the application is processing a buffer, the acquisition of the next buffer is done
+#    in parallel.
+#
+#    The CInstantCamera class uses a pool of buffers to retrieve image data
+#    from the camera device. Once a buffer is filled and ready,
+#    the buffer can be retrieved from the camera object for processing. The buffer
+#    and additional image data are collected in a grab result. The grab result is
+#    held by a smart pointer after retrieval. The buffer is automatically reused
+#    when explicitly released or when the smart pointer object is destroyed.
+# ===============================================================================
 from pypylon import pylon
-import time
+from pypylon import genicam
+from PIL import Image
 
+import sys
 
-height, width, n, = 2160, 3840, 1
-image_size = height * width
+# Number of images to be grabbed.
+countOfImagesToGrab = 10
 
-output_path = 'C:/Users/jdeblooi/OneDrive - NREL/BCS_Work/Saved_Photos/Camera_Testing'
+# The exit code of the sample application.
+exitCode = 0
 
-img = pylon.PylonImage()
+try:
+    # Create an instant camera object with the camera device found first.
+    tlf = pylon.TlFactory.GetInstance()
+    tl = tlf.CreateTl('BaslerGigE')
+    cam_info = tl.CreateDeviceInfo()
+    cam_info.SetIpAddress('192.168.3.3')
+    cam = pylon.InstantCamera(tlf.CreateDevice(cam_info))
+    cam.Open()
 
-cam = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
-cam.Open()
-cam.Height.SetValue(height)
-cam.Width.SetValue(width)
-cam.StartGrabbing()
+    # Print the model name of the camera.
+    print("Using device ", cam.GetDeviceInfo().GetModelName())
 
-for m in range(n):
-    with cam.RetrieveResult(2000) as res:
-        t1 = time.time()
+    # demonstrate some feature access
+    new_width = cam.Width.GetValue() - cam.Width.GetInc()
+    if new_width >= cam.Width.GetMin():
+        cam.Width.SetValue(new_width)
 
-        img.AttachGrabResultBuffer(res)
-        img.Save(pylon.ImageFileFormat_Tiff, output_path + 'test.tif')
+    # The parameter MaxNumBuffer can be used to control the count of buffers
+    # allocated for grabbing. The default value of this parameter is 10.
+    cam.MaxNumBuffer = 5
+    cam.PixelFormat.SetValue("Mono12")
+    # Start the grabbing of c_countOfImagesToGrab images.
+    # The camera device is parameterized with a default configuration which
+    # sets up free-running continuous acquisition.
+    cam.StartGrabbingMax(countOfImagesToGrab)
 
-        t2 = time.time()
-        print('fps: %.2f' % (1 / (t2 - t1)), \
-              'bandwidth: %.2f MB/s' % (image_size / 1024**2 / (t2 - t1)))
+    # Camera.StopGrabbing() is called automatically by the RetrieveResult() method
+    # when c_countOfImagesToGrab images have been retrieved.
+    while cam.IsGrabbing():
+        # Wait for an image and then retrieve it. A timeout of 5000 ms is used.
+        grabResult = cam.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
 
-cam.StopGrabbing()
-cam.Close()
+        # Image grabbed successfully?
+        if grabResult.GrabSucceeded():
+            # Access the image data.
+            print("SizeX: ", grabResult.Width)
+            print("SizeY: ", grabResult.Height)
+            img = grabResult.Array
+            print("Gray value of first pixel: ", img[0, 0])
+            print(f'Size of image: {img.shape}')
+            image = Image.fromarray(img)
+            image.show() 
+
+        else:
+            print("Error: ", grabResult.ErrorCode, grabResult.ErrorDescription)
+        grabResult.Release()
+    cam.Close()
+
+except genicam.GenericException as e:
+    # Error handling.
+    print("An exception occurred.")
+    print(e.GetDescription())
+    exitCode = 1
+
+sys.exit(exitCode)

@@ -32,7 +32,7 @@ import pypylon
 from pypylon import pylon
 import platform
 
-num_img_to_save = 5
+num_img_to_save = 1
 img = pylon.PylonImage()
 
 tlf = pylon.TlFactory.GetInstance()
@@ -42,32 +42,30 @@ cam_info.SetIpAddress('192.168.3.3')
 cam = pylon.InstantCamera(tlf.CreateDevice(cam_info))
 
 cam.Open()
-#cam.ExposureAuto.SetValue(cam.ExposureAuto.Continuous)
+# load manually set camera settings from in pylon app
+pylon.FeaturePersistence.Load("cam.pfs", cam.GetNodeMap(), True)
+
 cam.StartGrabbing()
 for i in range(num_img_to_save):
     with cam.RetrieveResult(2000) as result:
 
-        
         # Calling AttachGrabResultBuffer creates another reference to the
         # grab result buffer. This prevents the buffer's reuse for grabbing.
         img.AttachGrabResultBuffer(result)
 
-        if platform.system() == 'Windows':
             # The JPEG format that is used here supports adjusting the image
             # quality (100 -> best quality, 0 -> poor quality).
-            ipo = pylon.ImagePersistenceOptions()
-            quality = 90 - i * 10
-            ipo.SetQuality(quality)
+        ipo = pylon.ImagePersistenceOptions()
+        quality = 100
+        ipo.SetQuality(quality)
 
-            filename = "saved_pypylon_img_%d.jpeg" % quality
-            img.Save(pylon.ImageFileFormat_Jpeg, filename, ipo)
-        else:
-            filename = "saved_pypylon_img_%d.png" % i
-            img.Save(pylon.ImageFileFormat_Png, filename)
+        filename = "test_target.jpeg"
+        img.Save(pylon.ImageFileFormat_Jpeg, filename, ipo)
 
         # In order to make it possible to reuse the grab result for grabbing
         # again, we have to release the image (effectively emptying the
         # image object).
+        img.GetBuffer
         img.Release()
 
 cam.StopGrabbing()
@@ -77,7 +75,7 @@ cam.Close()
 img =imread(filename, as_gray = True)
 
 
-plt.imshow(img, cmap = plt.cm.gray)
+plt.imshow(img)
 
 #splitting color bands
 # hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
