@@ -22,8 +22,8 @@ OffsetY	8
 PixelFormat	Mono12
 TestPattern	Off
 ImageCompressionMode	Off
-BslAcquisitionStopMode	AbortExposure
-ExposureTime	3587.0
+BslAcquisitionStopMode	CompleteExposure
+ExposureTime	20338.0
 ExposureAuto	Continuous
 ExposureMode	Timed
 BslSensorBitDepthMode	Auto
@@ -95,7 +95,7 @@ TriggerDelay	0.0
 TriggerSelector	FrameStart
 BslAcquisitionBurstMode	Standard
 AcquisitionBurstFrameCount	1
-AutoTargetBrightness	0.500
+AutoTargetBrightness	0.600
 AutoFunctionProfile	MinimizeGain
 AutoGainLowerLimit	0.000
 AutoGainUpperLimit	24.000

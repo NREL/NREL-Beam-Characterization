@@ -47,7 +47,7 @@ pylon.FeaturePersistence.Load("cam.pfs", cam.GetNodeMap(), True)
 
 cam.StartGrabbing()
 for i in range(num_img_to_save):
-    with cam.RetrieveResult(2000) as result:
+    with cam.RetrieveResult(1000) as result:
 
         # Calling AttachGrabResultBuffer creates another reference to the
         # grab result buffer. This prevents the buffer's reuse for grabbing.
@@ -106,6 +106,7 @@ plt.imshow(im, cmap='gray')
 
 
 #Making Binary Image 
+im = (im * 255).round().astype(np.uint8)
 kernel = np.ones((3,3),np.uint8)
 blur = cv2.blur(im, (3,3));
 erodeI = 3
@@ -116,9 +117,6 @@ bin_img = cv2.adaptiveThreshold(imerode, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv
 bin_img = ~bin_img
 
 plt.axis('off')
-
-
-fileNum = iFile+1
 
 plt.imshow(bin_img, cmap='gray')
 
@@ -230,10 +228,10 @@ plt.show()
 
 
 import csv 
-f = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/TargetEdges/TargetEdges' + "File" + str(fileNum), 'w')
+f = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/TargetEdges/TargetEdges' + "File", 'w')
 theWriter = csv.writer(f)
 theWriter.writerow(['Image','Alpa', 'Beta','Erosions','Dilations','Top Left Corner','Top Right Corner','Lower Left Corner','Lower Right Corner'])
-theWriter.writerow([fileNum,alpha,beta,erodeI,dilateI,int_TL,int_TR,int_LL,int_LR])
+theWriter.writerow([alpha,beta,erodeI,dilateI,int_TL,int_TR,int_LL,int_LR])
 
 
 croppedIm = img[int(int_TL[1]):int(int_LL[1]), int(int_LL[0]):int(int_LR[0])]
