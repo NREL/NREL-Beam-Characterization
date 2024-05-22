@@ -96,7 +96,7 @@ def findcenter_KS(croppedIm, fileNum):
 
     area = np.zeros(len(cnts)); isarea = area.copy()
     # phi_alt = area.copy(); phi_elv = area.copy()
-    Centroid = []
+    Centroid = [None]*len(cnts)
     for ic,cnt in enumerate(cnts): 
       area[ic] = cv2.contourArea(cnt)
       if min_area <= area[ic] <= max_area:
@@ -110,15 +110,14 @@ def findcenter_KS(croppedIm, fileNum):
         # cv2.circle(src_copy, (cX,cY), 7, (255,0,0), -1)
         cX = M["m10"]/M["m00"]
         cY = M["m01"]/M["m00"]
-        Centroid.append((cX,cY))
+        Centroid[ic]=(cX,cY)
  
         
         eccentricity = eccentricity_from_ellipse(cnt)
-        f1 = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/BeamContour/BeamContour' + "File" + str(fileNum), 'w')
-        theWriter1 = csv.writer(f1)
-        theWriter1.writerow(['Centroids','Eccentricity'])
-        theWriter1.writerow([(cX,cY), eccentricity])
-        
+        # f1 = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/BeamContour/BeamContour' + "File" + str(fileNum), 'w')
+        # theWriter1 = csv.writer(f1)
+        # theWriter1.writerow(['Centroids','Eccentricity'])
+        # theWriter1.writerow([(cX,cY), eccentricity])   
     area = area*isarea
     # Find the smallest ellipse, which corresponds to the bright inner beam area
     # Alternatively, finding the largest ellipse would likely give an intensity-weighted centroid result.
@@ -128,7 +127,7 @@ def findcenter_KS(croppedIm, fileNum):
     plt.axis('off')
     plt.imshow(src_copy)
 
-    plt.savefig('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/ProcessedIms/BeamDetection/' + "Image" + str(fileNum), bbox_inches='tight', pad_inches=0)
+    # plt.savefig('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/ProcessedIms/BeamDetection/' + "Image" + str(fileNum), bbox_inches='tight', pad_inches=0)
      
     return Centroid[area_inner_loc]
 
@@ -161,8 +160,9 @@ def findcenter_DT(croppedIm, fileNum):
     # With the transformed target-only picture, identify the beam area on the target
     # Blur the image.
     imsize = np.shape(croppedIm)
-    cs = np.floor(imsize[0] * imsize[1] / 50000).astype(int)
-    d = np.floor(cs / 8).astype(int)
+    # cs = np.floor(imsize[0] * imsize[1] / 50000).astype(int)
+    # d = np.floor(cs / 8).astype(int)
+    cs = 51; d = 9
     trans_blur = cv2.bilateralFilter(croppedIm,d,cs,cs)
     
     # Scale the image. 

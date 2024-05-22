@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv 
 import cv2 
+from skimage.exposure import rescale_intensity
 from skimage.transform import hough_line, hough_line_peaks
 from skimage.io import imread
 from statistics import mean
@@ -11,8 +12,9 @@ from statistics import mean
 def readimage_KS(imageFile):
     # Reading in selected file, seperating color bands, displaying image, and printing image shape
     img = imread(imageFile, as_gray = True)
-    plt.imshow(img, cmap = plt.cm.gray)
-    
+    plt.figure(); plt.imshow(img, cmap = plt.cm.gray)
+    img_intensityscaled = rescale_intensity(img,in_range='image',out_range=(0,255)).astype(np.uint8)
+    plt.figure(); plt.imshow(img_intensityscaled, cmap = plt.cm.gray)
     #splitting color bands
     # hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
     # lower_blue = np.array([40,80,0])
@@ -31,7 +33,9 @@ def readimage_KS(imageFile):
     # c=img.shape
     # img.dtype
     # print("Image width: ",w[1]," pixels; Image height: ",w[0]," pixels")
-    return img
+    return img_intensityscaled
+
+
 
 def findcorners_KS(img,fileNum):
 #%% Normalizing image, improving image saturation, filtering, and binarizing
@@ -45,14 +49,13 @@ def findcorners_KS(img,fileNum):
     
     Because of these adjustments, I printed out successful values for alpha & beta in a csv file under Github>DataFiles. This is something that will need to be automated in the future. Maybe with image intensity sorting that assigns particular alpha and beta values depending on the overall image intensities.
     '''
-    # Apply saturation weights
-    alpha = 2
-    beta = 50
+    # # Apply saturation weights
+    # alpha = 1
+    # beta = 50    
+    # im = cv2.addWeighted(img, alpha, np.zeros(img.shape, img.dtype), 0, beta)
+    # plt.figure(); plt.imshow(im, cmap='gray')
     
-    im = cv2.addWeighted(img, alpha, np.zeros(img.shape, img.dtype), 0, beta)
-    
-    plt.imshow(im, cmap='gray')
-    
+    im = img
     
     # Adjust and binarize image
     kernel = np.ones((3,3),np.uint8)
@@ -61,9 +64,9 @@ def findcorners_KS(img,fileNum):
     dilateI = 3
     imerode = cv2.erode(blur,kernel,iterations = erodeI)
     im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
-    bin_img = cv2.adaptiveThreshold(imerode, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
+    bin_img = cv2.adaptiveThreshold(im_dilate, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
     bin_img = ~bin_img
-    
+    plt.figure()
     plt.axis('off')
     plt.imshow(bin_img, cmap='gray')
     
@@ -159,36 +162,51 @@ def findcorners_KS(img,fileNum):
     #sort intersections
     #There's always going to be two that don't work, these two are always going to be the first two since they are large positive numbers
     def get_max(sub):
-      return max(sub)
+      return max(abs(sub))
     
+    def get_prod(sub):
+        return abs(sub[0]*sub[1])
     test_list = [int_1, int_2, int_3, int_4, int_5, int_6]
-    test_list.sort(key = get_max, reverse = True)
-    #print("Sorted Tuples: " + str(test_list))
+    # test_prods = [tt[0] * tt[1] for tt in test_list]
+    def cornersdt(pts): #Locate corners of a rectangular contour and arrange them in clockwise order starting at top left
+        #Create a list of four points, corresponding to four corners of the target. CW starting top-left
+        points_array = [None]*4
+        
+        sums_vec = np.sum(pts,axis = 1) #Sum of x and y coordinate of each point of function argument
+        points_array[0] = pts[np.argmin(sums_vec)] #Lowest sum corresponds to top-left corner
+        points_array[2] = pts[np.argmax(sums_vec)] #Highest sum corresponds to bottom-right corner
+        
+        diffs_vec = np.diff(pts,axis = 1)
+        points_array[1] = pts[np.argmin(diffs_vec)] #Most-negative difference corresponds to top-right corner
+        points_array[3] = pts[np.argmax(diffs_vec)] #Most-positive difference corresponds to bottom-left corner
+        return points_array
     
-    int_TL =  test_list[5]
-    int_TR =  test_list[3]
-    int_LL = test_list[4]
-    int_LR = test_list[2]
     
+    test_list.sort(key = get_prod, reverse = True)
+    cwcorners = cornersdt(test_list[2:])
+    # print("Sorted Tuples: " + str(test_list))
+    
+    return cwcorners
+
     # print("Top Left Corner: ", int_TL)
     # print("Top Right Corner: ", int_TR)
     # print("Lower Right Corner: ",int_LR)
     # print("Lower Left Corner: ",int_LL)
     #%% Save corner locations on the Y-drive.
-    f = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/TargetEdges/TargetEdges' + "File" + str(fileNum), 'w')
-    theWriter = csv.writer(f)
-    theWriter.writerow(['Image','Alpa', 'Beta','Erosions','Dilations','Top Left Corner','Top Right Corner','Lower Left Corner','Lower Right Corner'])
-    theWriter.writerow([fileNum,alpha,beta,erodeI,dilateI,int_TL,int_TR,int_LL,int_LR])
-    corners = [(int_TL),(int_TR),(int_LR),(int_LL)]
-    return corners
+    # f = open('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/TargetEdges/TargetEdges' + "File" + str(fileNum), 'w')
+    # theWriter = csv.writer(f)
+    # theWriter.writerow(['Image','Alpa', 'Beta','Erosions','Dilations','Top Left Corner','Top Right Corner','Lower Left Corner','Lower Right Corner'])
+    # theWriter.writerow([fileNum,alpha,beta,erodeI,dilateI,int_TL,int_TR,int_LL,int_LR])
 
 #%%
 def cropimage_KS(img,corners):
+    
     int_TL = corners[0]; int_TR = corners[1]; int_LR = corners[2]; int_LL = corners[3]
     x_val = [x[0] for x in corners]
     y_val = [x[1] for x in corners]
     plt.plot(x_val,y_val, 'bo')
     
+
     #finding the center of the target given the coordinates of the edges 
     x_midpt = 0.5*(int_TL[0]+int_LR[0])
     y_midpt = 0.5*(int_TL[1] + int_LR[1])
@@ -220,7 +238,7 @@ def cropimage_KS(img,corners):
     # Original crop + resize code below
     #croppedIm = img[int(int_TL[1]):int(int_LL[1]), int(int_LL[0]):int(int_LR[0])]
     #croppedIm = cv2.resize(croppedIm, (1936,1456))
-    
+    plt.figure()
     plt.axis("off")
     plt.imshow(croppedIm, cmap = plt.cm.gray)
     return croppedIm
@@ -271,6 +289,7 @@ def cropimage_DT(img,in_corners):
     
     BCI_trans = transform_target(img,corners.astype(np.float32)) # Perform perspective correction and cropping to make the ORIGINAL target image perfectly rectangular and stripped of background        
     trans_crop = BCI_trans
+    plt.figure; plt.imshow(trans_crop,cmap = plt.cm.gray)
     return trans_crop
     # trans_crop = BCI_trans[idd][val_crop:-val_crop,val_crop:-val_crop] # Crop a border around the image
     # macro_plot2(trans_crop[idd],"channel " + str(idd+1) + " orig.",trans_fn,221) # Plot result in new plot
