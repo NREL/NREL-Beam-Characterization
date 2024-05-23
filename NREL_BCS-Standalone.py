@@ -39,9 +39,11 @@ from funcs_CentroidFinder import *
 img = readimage_KS(imageFile)
 corners = findcorners_KS(img,fileNum)
 
+
+#%%
 croppedImDT = cropimage_DT(img,corners)
 croppedImKS = cropimage_KS(img,corners)
-#%%
+
 def BCSresults(croppedIm,Centroid):
     target_mid_cropped = np.flipud(np.shape(croppedIm))/2
     dx = abs(Centroid[0]-target_mid_cropped[0])

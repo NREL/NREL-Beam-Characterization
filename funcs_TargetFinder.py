@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv 
 import cv2 
+from skimage.feature import canny
 from skimage.exposure import rescale_intensity
 from skimage.transform import hough_line, hough_line_peaks
 from skimage.io import imread
@@ -12,9 +13,9 @@ from statistics import mean
 def readimage_KS(imageFile):
     # Reading in selected file, seperating color bands, displaying image, and printing image shape
     img = imread(imageFile, as_gray = True)
-    plt.figure(); plt.imshow(img, cmap = plt.cm.gray)
+    # plt.figure(); plt.imshow(img, cmap = plt.cm.gray)
     img_intensityscaled = rescale_intensity(img,in_range='image',out_range=(0,255)).astype(np.uint8)
-    plt.figure(); plt.imshow(img_intensityscaled, cmap = plt.cm.gray)
+    # plt.figure(); plt.imshow(img_intensityscaled, cmap = plt.cm.gray)
     #splitting color bands
     # hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
     # lower_blue = np.array([40,80,0])
@@ -55,7 +56,9 @@ def findcorners_KS(img,fileNum):
     # im = cv2.addWeighted(img, alpha, np.zeros(img.shape, img.dtype), 0, beta)
     # plt.figure(); plt.imshow(im, cmap='gray')
     
-    im = img
+    im=cv2.equalizeHist(img)
+    # im = cv2.fastNlMeansDenoising(im,5,7,21)
+    plt.figure(); plt.imshow(im,cmap='gray')
     
     # Adjust and binarize image
     kernel = np.ones((3,3),np.uint8)
@@ -89,6 +92,15 @@ def findcorners_KS(img,fileNum):
     
     tested_angles = np.linspace((mintestangle*np.pi)/180, (maxtestangle*np.pi)/180, 100) 
     #tested_angles = np.linspace((-np.pi)/2, (np.pi)/2, 100)
+    
+    # brightness = np.sum(im)/(255*np.prod(np.shape(im)))
+    # print(brightness)
+    # minimum_brightness = 0.5
+
+        
+    # bin_img = canny(im,2,1,25)
+    plt.figure(); plt.imshow(bin_img,cmap='gray')
+    
     h, theta, d = hough_line(bin_img, tested_angles)
     
     
