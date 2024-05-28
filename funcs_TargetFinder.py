@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv 
 import cv2 
+import skimage
 from skimage.feature import canny
 from skimage.exposure import rescale_intensity
 from skimage.transform import hough_line, hough_line_peaks
@@ -15,25 +16,28 @@ def readimage_KS(imageFile):
     img = imread(imageFile, as_gray = True)
     # plt.figure(); plt.imshow(img, cmap = plt.cm.gray)
     img_intensityscaled = rescale_intensity(img,in_range='image',out_range=(0,255)).astype(np.uint8)
-    # plt.figure(); plt.imshow(img_intensityscaled, cmap = plt.cm.gray)
-    #splitting color bands
-    # hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
-    # lower_blue = np.array([40,80,0])
-    # upper_blue = np.array([222,222,255])
-    # mask = cv2.inRange(hsv, lower_blue, upper_blue)
-    # result = cv2.bitwise_and(img,img, mask=mask)
-    # r= cv2.split(result)
-    # g = cv2.split(result)
-    # b = cv2.split(result)
-    # r= cv2.split(img)
-    # g = cv2.split(img)
-    # b = cv2.split(img)
     
-    # w = img.shape
-    # h=img.shape
-    # c=img.shape
-    # img.dtype
-    # print("Image width: ",w[1]," pixels; Image height: ",w[0]," pixels")
+    def splitcolorbands(img): # unused function currently
+        #splitting color bands
+        hsv = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+        lower_blue = np.array([40,80,0])
+        upper_blue = np.array([222,222,255])
+        mask = cv2.inRange(hsv, lower_blue, upper_blue)
+        result = cv2.bitwise_and(img,img, mask=mask)
+        r= cv2.split(result)
+        g = cv2.split(result)
+        b = cv2.split(result)
+        r= cv2.split(img)
+        g = cv2.split(img)
+        b = cv2.split(img)
+        
+        w = img.shape
+        h=img.shape
+        c=img.shape
+        img.dtype
+        print("Image width: ",w[1]," pixels; Image height: ",w[0]," pixels")
+        
+        
     return img_intensityscaled
 
 
@@ -56,23 +60,37 @@ def findcorners_KS(img,fileNum):
     # im = cv2.addWeighted(img, alpha, np.zeros(img.shape, img.dtype), 0, beta)
     # plt.figure(); plt.imshow(im, cmap='gray')
     
-    im=cv2.equalizeHist(img)
-    # im = cv2.fastNlMeansDenoising(im,5,7,21)
-    plt.figure(); plt.imshow(im,cmap='gray')
+    im = img
+    
+    # # Perform histogram equalization, which will also brighten dark images
+    # # Two types of equalization are performed below; pick one.
+    # im=cv2.equalizeHist(img)
+    # plt.figure(); plt.imshow(im,cmap='gray')
+    # clahe = cv2.createCLAHE()
+    # im = clahe.apply(img)
+    # plt.figure(); plt.imshow(im, cmap='gray')
     
     # Adjust and binarize image
-    kernel = np.ones((3,3),np.uint8)
-    blur = cv2.blur(im, (3,3));
-    erodeI = 3
-    dilateI = 3
-    imerode = cv2.erode(blur,kernel,iterations = erodeI)
-    im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
-    bin_img = cv2.adaptiveThreshold(im_dilate, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
-    bin_img = ~bin_img
-    plt.figure()
-    plt.axis('off')
-    plt.imshow(bin_img, cmap='gray')
+    def localBinarize(inputimage):
+        kernel = np.ones((3,3),np.uint8)
+        blur = cv2.blur(inputimage, (3,3));
+        erodeI = 3
+        dilateI = 3
+        imerode = cv2.erode(blur,kernel,iterations = erodeI)
+        im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
+        bin_img = cv2.adaptiveThreshold(im_dilate, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
+        bin_img = ~bin_img
+        plt.figure()
+        plt.axis('off')
+        plt.imshow(bin_img, cmap='gray')
+        return bin_img 
     
+    
+    im = localBinarize(im)
+    bin_img = canny(im,sigma=1)
+    
+    
+    plt.figure(); plt.imshow(bin_img,cmap='gray')
     #%% Apply Hough transform
     
     '''
@@ -87,21 +105,16 @@ def findcorners_KS(img,fileNum):
     instead of hoping the algorithm finds them correctly. 
     In most cases, they are found correctly, but not always.
     '''
-    mintestangle = -89.03
-    maxtestangle = 90.2
+    # mintestangle = -89.03
+    # maxtestangle = 90.2
     
-    tested_angles = np.linspace((mintestangle*np.pi)/180, (maxtestangle*np.pi)/180, 100) 
-    #tested_angles = np.linspace((-np.pi)/2, (np.pi)/2, 100)
+    # tested_angles = np.linspace((mintestangle*np.pi)/180, (maxtestangle*np.pi)/180, 100) 
+    # #tested_angles = np.linspace((-np.pi)/2, (np.pi)/2, 100)
     
-    # brightness = np.sum(im)/(255*np.prod(np.shape(im)))
-    # print(brightness)
-    # minimum_brightness = 0.5
-
-        
-    # bin_img = canny(im,2,1,25)
-    plt.figure(); plt.imshow(bin_img,cmap='gray')
     
-    h, theta, d = hough_line(bin_img, tested_angles)
+    
+    # h, theta, d = hough_line(bin_img, tested_angles)
+    h, theta, d = hough_line(bin_img)
     
     
     hpeaks, angles, dists = hough_line_peaks(h,theta,d, min_distance=150, min_angle=2, threshold=150, num_peaks=4)
