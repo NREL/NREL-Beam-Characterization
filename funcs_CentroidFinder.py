@@ -16,15 +16,16 @@ def findcenter_KS(croppedIm, fileNum):
     im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
 
     imedge = cv2.Canny(im_dilate, 8,19)
-    img_th = cv2.adaptiveThreshold(imedge, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
+    thresmax = np.iinfo(croppedIm.dtype).max
+    img_th = cv2.adaptiveThreshold(imedge, thresmax, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
     #img_th=~img_th  
     #finding contours is easier when the contours themselves are in white. The contour I am looking for is the innermost contour that is in white. 
 
-    plt.axis('off')
 
     #morphlogy to remove unwanted noise
     img_th = cv2.morphologyEx(img_th, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5)))
-    plt.imshow(img_th, cmap='gray')
+    # plt.imshow(img_th, cmap='gray'); plt.axis('off')
+
 
     #%% Find contours
     '''
@@ -52,8 +53,8 @@ def findcenter_KS(croppedIm, fileNum):
       #cv2.putText(im, str(i), (cont[0,0,1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0,255,0), 4)
 
 
-    plt.figure(figsize=[5,5])
-    plt.imshow(src_copy);plt.title("Beam Contour");plt.axis('off')
+    # plt.figure(figsize=[5,5])
+    # plt.imshow(src_copy);plt.title("Beam Contour");plt.axis('off')
 
     #%% Filtering the contours, and fitting elipses to them
     '''
@@ -123,9 +124,9 @@ def findcenter_KS(croppedIm, fileNum):
     # Alternatively, finding the largest ellipse would likely give an intensity-weighted centroid result.
     area_inner_loc = np.argmax(area*[area==np.min(area[np.nonzero(area)])])
     
-    plt.figure(figsize=[5,5])
-    plt.axis('off')
-    plt.imshow(src_copy)
+    # plt.figure(figsize=[5,5])
+    # plt.axis('off')
+    # plt.imshow(src_copy)
 
     # plt.savefig('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/ProcessedIms/BeamDetection/' + "Image" + str(fileNum), bbox_inches='tight', pad_inches=0)
      
@@ -210,20 +211,20 @@ def findcenter_DT(croppedIm, fileNum):
         print("Error locating all flux areas.")
         exit()
         
-    # Plot the output from the last code block
-    plt.figure();    
-    f_fig, f_ax = macro_plot2(trans_fin,"Flux map",plt.gcf().number,111)
+    # # Plot the output from the last code block
+    # plt.figure();    
+    # f_fig, f_ax = macro_plot2(trans_fin,"Flux map",plt.gcf().number,111)
     
-    #Add patches to show 90% region and centroid # 'cyan',
-    cpalette = ['darkturquoise','slateblue','springgreen','mediumseagreen',
-                'yellowgreen','yellow','orange','red','brown']
+    # #Add patches to show 90% region and centroid # 'cyan',
+    # cpalette = ['darkturquoise','slateblue','springgreen','mediumseagreen',
+    #             'yellowgreen','yellow','orange','red','brown']
     
-    for id_xx, xx in enumerate(storage_contours):
-        patch_flx = Polygon(xx,closed=True,facecolor=cpalette[id_xx],edgecolor='none')
-        f_ax.add_patch(patch_flx)
+    # for id_xx, xx in enumerate(storage_contours):
+    #     patch_flx = Polygon(xx,closed=True,facecolor=cpalette[id_xx],edgecolor='none')
+    #     f_ax.add_patch(patch_flx)
    
-    f_ax.add_patch(circ) # Plot centroid on image
+    # f_ax.add_patch(circ) # Plot centroid on image
     
-    plt.tight_layout()
+    # plt.tight_layout()
     
     return (cX,cY)

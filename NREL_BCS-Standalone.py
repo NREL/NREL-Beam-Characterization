@@ -10,12 +10,12 @@ import skimage as sk
 
 # print("Imports complete.")
 
-#%% Deliver inputs to the script
-R = 120 # Heliostat-target distance, meters
-W = 2.0 # Target width, meters
-H = 2.2 # Target height, meters
+# Deliver inputs to the script
+R = 200 # Heliostat-target distance, meters
+W = 12 # Target width, meters
+H = 12 # Target height, meters
 # input_locdirectory = "Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/CrescentDunes"
-input_locdirectory = r'C:\Users\DTSVANKI\OneDrive - NREL\BCS Comparison\CENER\data\raw_input\raw_input\CAT\07_20_2022\images'
+input_locdirectory = r'C:\Users\DTSVANKI\OneDrive - NREL\BCS Comparison\CENER\data\raw_input\raw_input\CAT\04_03_2021\images\Images_2'
 input_filetype = "tif"
 
 '''
@@ -23,7 +23,7 @@ Choosing image files to process
    
 '''
 imageFilename = input_locdirectory + "/*." + input_filetype
-imageFiles = sorted(glob.glob(imageFilename),key=len)
+imageFiles = sorted(glob.glob(imageFilename))
 
 for ii in range(len(imageFiles)):
   print(ii+1, ",", imageFiles[ii])
@@ -32,15 +32,16 @@ imageFile = imageFiles[fileNum-1]
 
 print("Selected file: ",imageFile)
 
-#%% Process image using imported functions 
+#%% Process image using imported functions
+from funcs_CornerFinder import * 
 from funcs_TargetFinder import  *
 from funcs_CentroidFinder import *
 
 img = readimage_KS(imageFile)
-corners = findcorners_KS(img,fileNum)
-
-
+corners,submethod = findcorners_KS(img,fileNum)
+print("Method ",submethod," chosen.")
 #%%
+
 croppedImDT = cropimage_DT(img,corners)
 croppedImKS = cropimage_KS(img,corners)
 
@@ -67,23 +68,23 @@ def BCSresults(croppedIm,Centroid):
     return [phi_az,phi_el]
 
 
-
-list_ims = [croppedImDT,croppedImKS,croppedImDT,croppedImKS]
-
-list_centroids = [None]*4
-list_centroids[0] = findcenter_DT(list_ims[0],fileNum)
+list_ims = [croppedImDT,croppedImDT]
+numcentroids = 2
+list_centroids = [None]*numcentroids
+list_centroids[0] = findcenter_KS(list_ims[0],fileNum)
 list_centroids[1] = findcenter_DT(list_ims[1],fileNum)
-list_centroids[2] = findcenter_KS(list_ims[2],fileNum)
-list_centroids[3] = findcenter_KS(list_ims[3],fileNum)
 
-list_trackdevs = [None]*8
+
+# Export results
+ 
+list_trackdevs = [None]*numcentroids*2
 for idlc,lc in enumerate(list_centroids):
     trackdev = BCSresults(list_ims[idlc],lc)
     list_trackdevs[2*idlc] = trackdev[0] # azimuth
     list_trackdevs[2*idlc+1] = trackdev[1] # elevation
+list_trackdevs.insert(0,submethod)
 list_trackdevs.insert(0,imageFile)
-BCSoutput = pd.DataFrame(data=[list_trackdevs],columns=('fileloc','az, DTDT','el, DTDT',
-                                                      'az, KSDT','el,KSDT',
-                                                      'az,DTKS','el,DTKS',
-                                                      'az,KSKS,','el,KSKS'))
+BCSoutput = pd.DataFrame(data=[list_trackdevs],columns=('fileloc','cornermethod',
+                                                        'az, KS','el, KS',
+                                                      'az, DT','el,DT',))
 BCSoutput.to_csv('CENERtestresults.csv',mode='a', index=False, header=False)
