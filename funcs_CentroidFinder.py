@@ -6,16 +6,16 @@ import cv2
 import csv
 from math import sqrt
 
-def findcenter_KS(croppedIm, fileNum):
+def findcenter_KS(croppedIm, fileNum, params):
     #%% Accentuate shape of beam on target
-    kernel = np.ones((3,3),np.uint8)
-    blur = cv2.blur(croppedIm, (3,3))
-    erodeI = 5
-    dilateI = 15
+    kernel = np.ones((params['kernelsize'],params['kernelsize']),np.uint8) # default = 3
+    blur = cv2.blur(croppedIm, (params['blursize'],params['blursize'])) # default = 3
+    erodeI = params['erodeI'] # default = 5
+    dilateI = params['dilateI'] # default = 15
     imerode = cv2.erode(blur,kernel,iterations = erodeI)
     im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
 
-    imedge = cv2.Canny(im_dilate, 8,19)
+    imedge = cv2.Canny(im_dilate, params['cannylower'],params['cannyupper']) # defaults: 8, 19
     thresmax = np.iinfo(croppedIm.dtype).max
     img_th = cv2.adaptiveThreshold(imedge, thresmax, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
     #img_th=~img_th  
@@ -80,13 +80,15 @@ def findcenter_KS(croppedIm, fileNum):
         return ecc 
 
     cnts, hiers = cv2.findContours(img_th, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)[-2:]
+   
+    
     src_copy =img_th.copy()
     src_copy = cv2.cvtColor(src_copy, cv2.COLOR_BGR2RGB)
 
     # Pixel areas. These may need adjustment or an equation-based designation based
     # on camera resolutioin to keep from having to fiddle with them. 
-    max_area = 500000
-    min_area = 10000
+    max_area = np.size(croppedIm)/2
+    min_area = max_area / 100
 
 
     for i, cont in enumerate(cnts):
@@ -94,7 +96,7 @@ def findcenter_KS(croppedIm, fileNum):
         src_copy = cv2.drawContours(src_copy, cont, -1, (0,255,0), 5)
       else:
         src_copy = cv2.drawContours(src_copy, cont, -1, (0,0,255),5)
-
+    
     area = np.zeros(len(cnts)); isarea = area.copy()
     # phi_alt = area.copy(); phi_elv = area.copy()
     Centroid = [None]*len(cnts)
@@ -120,20 +122,23 @@ def findcenter_KS(croppedIm, fileNum):
         # theWriter1.writerow(['Centroids','Eccentricity'])
         # theWriter1.writerow([(cX,cY), eccentricity])   
     area = area*isarea
-    # Find the smallest ellipse, which corresponds to the bright inner beam area
-    # Alternatively, finding the largest ellipse would likely give an intensity-weighted centroid result.
-    area_inner_loc = np.argmax(area*[area==np.min(area[np.nonzero(area)])])
+    if len(cnts) == 0 or np.sum(area)==0: # If we didn't find any contours
+        return []
+    else:
+        # Find the smallest ellipse, which corresponds to the bright inner beam area
+        # Alternatively, finding the largest ellipse would likely give an intensity-weighted centroid result.
+        area_inner_loc = np.argmax(area*[area==np.min(area[np.nonzero(area)])])
+        
+        # plt.figure(figsize=[5,5])
+        # plt.axis('off')
+        # plt.imshow(src_copy)
     
-    # plt.figure(figsize=[5,5])
-    # plt.axis('off')
-    # plt.imshow(src_copy)
-
-    # plt.savefig('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/ProcessedIms/BeamDetection/' + "Image" + str(fileNum), bbox_inches='tight', pad_inches=0)
-     
-    return Centroid[area_inner_loc]
+        # plt.savefig('Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/DataFiles/CrescentDunes/ProcessedIms/BeamDetection/' + "Image" + str(fileNum), bbox_inches='tight', pad_inches=0)
+         
+        return Centroid[area_inner_loc]
 
     
-def findcenter_DT(croppedIm, fileNum):
+def findcenter_DT(croppedIm, fileNum, params):
     def macro_scale(img): 
         # This function scales the image such that its darkest spot is 0 and its lightest is 255
         gray_min = img.min()
@@ -163,7 +168,7 @@ def findcenter_DT(croppedIm, fileNum):
     imsize = np.shape(croppedIm)
     # cs = np.floor(imsize[0] * imsize[1] / 50000).astype(int)
     # d = np.floor(cs / 8).astype(int)
-    cs = 51; d = 9
+    cs = params['bilateralcs']; d = params['bilaterald'] # defaults: 51, 9
     trans_blur = cv2.bilateralFilter(croppedIm,d,cs,cs)
     
     # Scale the image. 
@@ -172,7 +177,7 @@ def findcenter_DT(croppedIm, fileNum):
     # Threshold the image. The background should be mostly blank
     #Start with Otsu's method
     val_otsu, trans_otsu = cv2.threshold(trans_scaled,0,255,cv2.THRESH_BINARY + cv2.THRESH_OTSU) 
-    val_thresh = int(val_otsu*0.75)
+    val_thresh = int(val_otsu*params['otsumultiplier'])
     val_thresh, trans_thresh = cv2.threshold(trans_scaled,val_thresh,255,cv2.THRESH_BINARY)
     
     # Normalize and multiply the thresheld image by the original cropped image

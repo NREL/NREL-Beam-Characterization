@@ -34,7 +34,7 @@ def readimage_KS(imageFile):
         
         
     # Reading in selected file, seperating color bands, displaying image, and printing image shape
-    img = imread(imageFile, as_gray = True)
+    img = cv2.imread(imageFile, 0)
     # maxhere = np.iinfo(img.dtype).max
     # # Assume we're setting this to a uint8
     # maxnew = np.floor(np.max(img)/maxhere*255)
@@ -113,7 +113,7 @@ def findcorners_KS(img,fileNum):
         dilateI = 3
         imerode = cv2.erode(blur,kernel,iterations = erodeI)
         im_dilate = cv2.dilate(imerode,kernel,iterations = dilateI)
-        thresmax = np.iinfo(inputimage.dtype).max
+        thresmax = np.iinfo(inputimage.dtype).max # Maximum pixel brightness value based on image datatype
         bin_img = cv2.adaptiveThreshold(im_dilate, thresmax, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 2)
         bin_img = ~bin_img
         # plt.figure()
@@ -130,7 +130,7 @@ def findcorners_KS(img,fileNum):
         #Takes a list of points (each item in the list is an x-y pair) and produces the perimeter of the resulting closed shape
         endPoints = inputPoints[1:]
         endPoints.append(inputPoints[0])
-        print(endPoints)
+        # print(endPoints)
         numSegments = len(inputPoints)
         segmentLengths = [None]*numSegments
         for idp, pp in enumerate(inputPoints):
@@ -138,11 +138,9 @@ def findcorners_KS(img,fileNum):
             x2 = endPoints[idp][0]; y2 = endPoints[idp][1]
             segmentLengths[idp] = ((x2-x1)**2 + (y2-y1)**2)**0.5
         return np.sum(segmentLengths)
-            
-    
     
     img_step1 = localBinarize(img)
-    img_step2 = skimage.morphology.skeletonize(img_step1)
+    img_step2 = skimage.morphology.skeletonize(cv2.morphologyEx(img_step1,cv2.MORPH_OPEN,np.ones((3,3))))
     # img_step2 = cv2.Canny(img_step1,90,255)
     
     img_step3 = canny(bilat(img),sigma=1)
@@ -268,6 +266,7 @@ def findcorners_KS(img,fileNum):
         return cwcorners
     
     # imcorn0 = macro_hough(img_step0, '0. Tuckerization')
+    # Attempt finding Hough lines for three different preprocessing variants
     imcorn1 = macro_hough(img_step1, '1. Binarize')
     imcorn2 = macro_hough(img_step2, '2. Binarize then skeletonize')
     imcorn3 = macro_hough(img_step3, '3. Canny edge detect')
@@ -275,11 +274,21 @@ def findcorners_KS(img,fileNum):
     corns = [imcorn1,imcorn2,imcorn3]
     perimeters = np.zeros((len(corns),1))
     
+    # Get target perimeter length where all four intersection points are within image bounds.
     for idc,cc in enumerate(corns):
         if np.min(np.array(cc)) > 0: perimeters[idc] = getPerimeter(cc)
-    
+        
+    # Find minimum non-zero perimeter
     funcout = np.min(perimeters[np.nonzero(perimeters)])
-    chosenvariant = np.where(perimeters==funcout)[0][0]+1
+    cornloc = np.where(perimeters==funcout)[0][0]
+    
+    # If the minimum non-zero perimeter is within 2% of the third preprocessing method,
+    # it is preferred to just use this method because it is assumed correct.
+    errbound = 0.01
+    if (1-errbound)*perimeters[-1] < perimeters[cornloc] < (1+errbound)*perimeters[-1]:
+        cornloc = len(perimeters)-1
+    chosencorns = corns[cornloc]
+    chosenvariant = cornloc + 1
     # chosenvariant = int(input("Enter 1, 2, or 3 depending on which target edges are correct: ",))
     # if chosenvariant==1:
     #     funcout = imcorn1
@@ -290,7 +299,7 @@ def findcorners_KS(img,fileNum):
     # else: 
     #     funcout = imcorn3
     #     print('Variant 3 chosen')
-    return [funcout,chosenvariant]
+    return [chosencorns, chosenvariant]
     
     # print("Top Left Corner: ", int_TL)
     # print("Top Right Corner: ", int_TR)

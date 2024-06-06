@@ -6,6 +6,7 @@ import glob
 from math import sqrt
 import cv2
 import skimage as sk
+import imutils
 
 
 # print("Imports complete.")
@@ -15,7 +16,7 @@ R = 200 # Heliostat-target distance, meters
 W = 12 # Target width, meters
 H = 12 # Target height, meters
 # input_locdirectory = "Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/CrescentDunes"
-input_locdirectory = r'C:\Users\DTSVANKI\OneDrive - NREL\BCS Comparison\CENER\data\raw_input\raw_input\CAT\04_03_2021\images\Images_2'
+input_locdirectory = r'C:\Users\DTSVANKI\OneDrive - NREL\BCS Comparison\CENER\data\raw_input\raw_input\CAT\03_22_2023\images'
 input_filetype = "tif"
 
 '''
@@ -32,16 +33,17 @@ imageFile = imageFiles[fileNum-1]
 
 print("Selected file: ",imageFile)
 
-#%% Process image using imported functions
+# Process image using imported functions
 from funcs_CornerFinder import * 
 from funcs_TargetFinder import  *
-from funcs_CentroidFinder import *
 
 img = readimage_KS(imageFile)
+# img = imutils.rotate(img,180) # Just for CENER photos that are upside-down)
+# plt.imshow(img,cmap=plt.cm.gray)
 corners,submethod = findcorners_KS(img,fileNum)
 print("Method ",submethod," chosen.")
-#%%
-
+#%% Process cropped image
+from funcs_CentroidFinder import *
 croppedImDT = cropimage_DT(img,corners)
 croppedImKS = cropimage_KS(img,corners)
 
@@ -67,24 +69,82 @@ def BCSresults(croppedIm,Centroid):
     
     return [phi_az,phi_el]
 
+def tryKS():
+    outputKS = pd.DataFrame()
+    for kernelKS in range(1,7,2):
+        for blurKS in range(3,6,2):
+            for erodeKS in range(3,8,1):
+                for dilateKS in range(13,18,1):
+                    for cannylKS in range(7,10,1):
+                        cannyuKS = cannylKS*2 + 3
+                        paramsKS = {'kernelsize': kernelKS,
+                                    'blursize': blurKS,
+                                    'erodeI': erodeKS,
+                                    'dilateI': dilateKS,
+                                    'cannylower': cannylKS,
+                                    'cannyupper': cannyuKS}
+                        centroid = findcenter_KS(croppedImDT,fileNum,paramsKS)
+                        if centroid == []:
+                            dev_az = 0; dev_el = 0
+                        else:
+                            [dev_az,dev_el] = BCSresults(croppedImDT,centroid)
+                        outputKS = pd.concat([outputKS,pd.DataFrame([[dev_az,dev_el,'KS',imageFilename,kernelKS,blurKS,erodeKS,dilateKS,cannylKS,cannyuKS]])])
+    return outputKS
+# output.to_csv('SensitivityStudy.csv',mode='a', index=False, header=False)
 
-list_ims = [croppedImDT,croppedImDT]
-numcentroids = 2
-list_centroids = [None]*numcentroids
-list_centroids[0] = findcenter_KS(list_ims[0],fileNum)
-list_centroids[1] = findcenter_DT(list_ims[1],fileNum)
+def tryDT():
+    outputDT = pd.DataFrame()
+    for bilatcs in range(39,64,6):
+        for bilatd in range(3,16,3):
+            for otsuDT in range(45,105,5):
+                paramsDT = {'bilateralcs': bilatcs,
+                            'bilaterald': bilatd,
+                            'otsumultiplier': otsuDT/100}
+                centroid = findcenter_DT(croppedImDT, fileNum,paramsDT)
+                [dev_az,dev_el] = BCSresults(croppedImDT,centroid)
+                outputDT = pd.concat([outputDT,pd.DataFrame([[dev_az,dev_el,'DT',imageFilename,bilatcs, bilatd, otsuDT/100]])])
+    return outputDT
+
+sensitivityKS = tryKS()
+sensitivityDT = tryDT()
+
+def macrohist(indata,intitle):
+    plt.hist(indata,color='k')
+    plt.title(intitle)
+
+# Plot and store results
+plt.figure(); fig,axs = plt.subplots(nrows = 2, ncols = 2,sharex=False,sharey=False,layout='constrained');
+axs[0,0].hist(sensitivityKS[0], color='k');
+axs[0,0].set_title('Azimuth, mrad, inner contour');
+axs[0,1].hist(sensitivityKS[1], color='k');
+axs[0,1].set_title('Elevation, mrad, inner contour');
+
+axs[1,0].hist(sensitivityDT[0], color='k')
+axs[1,0].set_title('Azimuth, mrad, outer contour');
+axs[1,1].hist(sensitivityDT[1], color='k');
+axs[1,1].set_title('Elevation, mrad, outer contour');
+
+catloc = imageFile.find('CAT')
+histimname = 'result_'+imageFile[catloc+4:-4].replace('\\','_')+'.png'
+fig.savefig(histimname)
+#%% 
+# list_ims = [croppedImDT,croppedImDT]
+# numcentroids = 2
+# list_centroids = [None]*numcentroids
+# list_centroids[0] = findcenter_KS(list_ims[0],fileNum)
+# list_centroids[1] = findcenter_DT(list_ims[1],fileNum)
 
 
-# Export results
+# # Export results
  
-list_trackdevs = [None]*numcentroids*2
-for idlc,lc in enumerate(list_centroids):
-    trackdev = BCSresults(list_ims[idlc],lc)
-    list_trackdevs[2*idlc] = trackdev[0] # azimuth
-    list_trackdevs[2*idlc+1] = trackdev[1] # elevation
-list_trackdevs.insert(0,submethod)
-list_trackdevs.insert(0,imageFile)
-BCSoutput = pd.DataFrame(data=[list_trackdevs],columns=('fileloc','cornermethod',
-                                                        'az, KS','el, KS',
-                                                      'az, DT','el,DT',))
-BCSoutput.to_csv('CENERtestresults.csv',mode='a', index=False, header=False)
+# list_trackdevs = [None]*numcentroids*2
+# for idlc,lc in enumerate(list_centroids):
+#     trackdev = BCSresults(list_ims[idlc],lc)
+#     list_trackdevs[2*idlc] = trackdev[0] # azimuth
+#     list_trackdevs[2*idlc+1] = trackdev[1] # elevation
+# list_trackdevs.insert(0,submethod)
+# list_trackdevs.insert(0,imageFile)
+# BCSoutput = pd.DataFrame(data=[list_trackdevs],columns=('fileloc','cornermethod',
+#                                                         'az, KS','el, KS',
+#                                                       'az, DT','el,DT',))
+# BCSoutput.to_csv('CENERtestresults.csv',mode='a', index=False, header=False)
