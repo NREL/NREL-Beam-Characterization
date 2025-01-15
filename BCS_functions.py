@@ -4,13 +4,15 @@ from skimage.io import imread
 import os
 import cv2
 from skimage.transform import hough_line, hough_line_peaks
-
+from skimage import img_as_float
 
 class BCS_functions:
     @staticmethod
     def load_image(img_path: str) -> np.ndarray:
         """
         Load and process image for target edge detection
+
+        returns to images, one for edge detection, another one for centroid finding
         """
         _, imageExtension = os.path.splitext(img_path)
         img = imread(img_path)
@@ -29,7 +31,7 @@ class BCS_functions:
         beta = 50
         im = cv2.addWeighted(img, alpha, np.zeros(img.shape, img.dtype), 0, beta)
 
-        return im
+        return im, img
     
     @staticmethod
     def find_corner_candidates(img: np.ndarray) -> list:
@@ -128,3 +130,90 @@ class BCS_functions:
             if i[0] > 0 and i[0] < img_shape[1] and i[1] > 0 and i[1] < img_shape[0]:
                 valid_ints.append(i)
         return organize_positions(valid_ints)
+    
+    @staticmethod
+    def rectify_and_crop(unprocessed_im: np.ndarray, corners: list) -> np.ndarray:
+        img_output_size = 1000
+        dst_points = np.float32([[0, 0], [img_output_size, 0], [0, img_output_size], [img_output_size, img_output_size]])
+        src_points = np.float32(corners)
+        M = cv2.getPerspectiveTransform(src_points, dst_points)
+        transformed_im = cv2.warpPerspective(unprocessed_im, M, (img_output_size, img_output_size))
+        croppedIm = transformed_im[0:img_output_size, 0:img_output_size]
+
+        return croppedIm
+    
+    @staticmethod
+    def low_pass_filter(image, keep_ratio):
+        # Convert the image to grayscale if it is not already
+        if len(image.shape) == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Get the dimensions of the image
+        rows, cols = image.shape
+        
+        # Perform the 2D FFT
+        f = np.fft.fft2(image)
+        fshift = np.fft.fftshift(f)
+        
+        # Create a mask with the same dimensions as the image
+        mask = np.zeros((rows, cols), np.uint8)
+        
+        # Calculate the center of the image
+        crow, ccol = rows // 2 , cols // 2
+        
+        # Determine the size of the low-pass filter
+        keep_rows = int(rows * keep_ratio / 2)
+        keep_cols = int(cols * keep_ratio / 2)
+        
+        # Apply the mask to keep the low frequency components
+        mask[crow-keep_rows:crow+keep_rows, ccol-keep_cols:ccol+keep_cols] = 1
+        
+        # Apply the mask to the shifted FFT
+        fshift = fshift * mask
+        
+        # Perform the inverse FFT
+        f_ishift = np.fft.ifftshift(fshift)
+        img_back = np.fft.ifft2(f_ishift)
+        img_back = np.abs(img_back)
+
+        img_back = (img_back / np.max(img_back) * 255).astype(np.uint8)
+        
+        return img_back
+        
+    @staticmethod
+    def find_centroid(img):
+        img = img_as_float(img)
+        M = np.sum(img)
+        y_indices, x_indices = np.indices(img.shape)
+        X_c = np.sum(x_indices * img) / M
+        Y_c = np.sum(y_indices * img) / M
+        return X_c, Y_c
+    
+    @staticmethod
+    def gamma_correction(img, gamma_val):
+        img = np.power(img.astype(np.float64), gamma_val)
+        img = (img / np.max(img) * 255).astype(np.uint8)
+
+        return img
+        
+if __name__ == "__main__":
+    img_path = r"Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/CrescentDunes\Image4.bmp"
+    img, img_centroid = BCS_functions.load_image(img_path)
+    corners = BCS_functions.find_corner_candidates(img)
+    valid_corners = BCS_functions.valid_intersections(corners, img.shape)
+    rectified_img = BCS_functions.rectify_and_crop(img_centroid, valid_corners)
+    rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
+    rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 5)
+    centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
+
+    # matplotlib show rectified image
+    import matplotlib.pyplot as plt
+    plt.imshow(rectified_img_gamma_filtered, cmap='gray')
+    plt.scatter(centroid_location[0], centroid_location[1], c='r', s=100)
+    plt.show()
+
+    print(centroid_location)
+
+
+
+
