@@ -179,6 +179,8 @@ class BCS_functions:
         img_back = (img_back / np.max(img_back) * 255).astype(np.uint8)
         
         return img_back
+    
+    
         
     @staticmethod
     def find_centroid(img):
@@ -202,7 +204,8 @@ if __name__ == "__main__":
     corners = BCS_functions.find_corner_candidates(img)
     valid_corners = BCS_functions.valid_intersections(corners, img.shape)
     rectified_img = BCS_functions.rectify_and_crop(img_centroid, valid_corners)
-    rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
+    # rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
+    rectified_img_filtered = cv2.medianBlur(rectified_img, 35)
     rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 5)
     centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
 

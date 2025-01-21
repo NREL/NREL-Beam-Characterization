@@ -12,15 +12,22 @@ def find_centroid_wrapper(img_path: str, visualization:bool = False) -> np.ndarr
     corners = BCS_functions.find_corner_candidates(img)
     valid_corners = BCS_functions.valid_intersections(corners, img.shape)
     rectified_img = BCS_functions.rectify_and_crop(img_centroid, valid_corners)
-    rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
-    rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 5)
+    # rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
+    rectified_img_filtered = cv2.medianBlur(rectified_img, 35)
+    rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 7)
 
     centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
 
     if visualization:
         import matplotlib.pyplot as plt
-        plt.imshow(rectified_img_gamma_filtered, cmap='gray')
-        plt.scatter(centroid_location[0], centroid_location[1], c='r', s=100)
+        fig, axs = plt.subplots(1, 2)
+        axs[0].imshow(rectified_img, cmap='gray')
+        axs[0].set_title("Rectified image")
+        axs[0].axis('off')
+        axs[1].imshow(rectified_img_gamma_filtered, cmap='gray')
+        axs[1].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
+        axs[1].set_title("Gamma corrected image")
+        axs[1].axis('off')
         plt.show()
 
     return centroid_location
@@ -49,25 +56,70 @@ if __name__ == "__main__":
     
     for index, row in valid_entries.iterrows():
         img_path = os.path.join(root_folder, row["ImagePath"], row["ImageName"])
+        if os.path.exists(img_path) is False:
+            print(f"Image {img_path} does not exist")
+            continue
 
         # PSA data does not need corner finding
         if row["Source"] == "PSA":
             _, img = BCS_functions.load_image(img_path)
             img = cv2.resize(img, (1000, 1000))
             
-            img_gamma = BCS_functions.gamma_correction(img, 5)
+            img_gamma = BCS_functions.gamma_correction(img, 2)
             centroid_location = BCS_functions.find_centroid(img_gamma)
 
             if visualization:
                 import matplotlib.pyplot as plt
-                plt.imshow(img_gamma, cmap='gray')
-                plt.scatter(centroid_location[0], centroid_location[1], c='r', s=50)
-                plt.title(row["ImageName"])
+                fig, axs = plt.subplots(1, 2)
+                axs[0].imshow(img_gamma, cmap='gray')
+                axs[0].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
+                axs[0].set_title("Gamma corrected image")
+                axs[0].axis('off')
+                axs[1].imshow(img, cmap='gray')
+                axs[1].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
+                axs[1].set_title("Original image")
+                axs[1].axis('off')
+
+                plt.show()
+        elif row["Source"] == "Sandia":
+            _, img = BCS_functions.load_image(img_path)
+            img = cv2.resize(img, (1000, 1000))
+            # img_low_pass = BCS_functions.low_pass_filter(img, keep_ratio=0.1)
+            img_low_pass = cv2.medianBlur(img, 35)
+            img_gamma = BCS_functions.gamma_correction(img_low_pass, 2)
+            centroid_location = BCS_functions.find_centroid(img_gamma)
+
+             # TODO: Change this number, just made up since there's no data
+            row["TargetW"] = 12
+
+            if visualization:
+                import matplotlib.pyplot as plt
+                # 2 subplot
+                fig, axs = plt.subplots(1, 2)
+                axs[0].imshow(img_gamma, cmap='gray')
+                axs[0].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
+                axs[0].set_title("Gamma corrected image")
+                axs[0].axis('off')
+                axs[1].imshow(img, cmap='gray')
+                axs[1].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
+                axs[1].set_title("Original image")
+                axs[1].axis('off')
+
                 plt.show()
 
-            else:
-                centroid_location = find_centroid_wrapper(img_path, visualization=visualization)
+        elif row["Source"] == "CENER":
+            row["HeliostatX"] = 0
+            row["HeliostatY"] = 0
+            row["HeliostatZ"] = 0
 
+            row["TargetX"] = 0
+            row["TargetY"] = 201
+            row["TargetZ"] = 9.975
+            centroid_location = find_centroid_wrapper(img_path, visualization=visualization)
+
+        else:
+            raise ValueError(f"Unknown source {row['Source']}")
+        
         # 500 is the center pixel location since the orignial image is scaled to 1000x1000
         err_x_px = centroid_location[0] - 500
         err_y_px = centroid_location[1] - 500
