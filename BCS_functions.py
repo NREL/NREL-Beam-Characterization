@@ -199,6 +199,7 @@ class BCS_functions:
         return img
         
 if __name__ == "__main__":
+    # FOR TESTING ONLY
     img_path = r"Y:/5700/SolarElectric/PROJECTS/38488_HelioCon_Zhu/BeamCharacterizationSystems/CrescentDunes\Image4.bmp"
     img, img_centroid = BCS_functions.load_image(img_path)
     corners = BCS_functions.find_corner_candidates(img)

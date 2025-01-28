@@ -1,22 +1,47 @@
+from functools import partial
 import pandas as pd
 import numpy as np
 import os
 from BCS_functions import BCS_functions
 import cv2
 
+GAUSSIAN_NOISE_MEAN = 0
+GAUSSIAN_NOISE_STDV = 0.05   # 5% of the max value
+NOISE_ITERATIONS = 10
+
+# img_filter_function = partial(BCS_functions.low_pass_filter, keep_ratio=0.02)
+img_filter_function = partial(cv2.medianBlur, ksize=35)
+
 def find_centroid_wrapper(img_path: str, visualization:bool = False) -> np.ndarray:
     """
     Wrapper function to find the centroid of the image
     """
-    img, img_centroid = BCS_functions.load_image(img_path)
-    corners = BCS_functions.find_corner_candidates(img)
-    valid_corners = BCS_functions.valid_intersections(corners, img.shape)
-    rectified_img = BCS_functions.rectify_and_crop(img_centroid, valid_corners)
-    rectified_img_filtered = BCS_functions.low_pass_filter(rectified_img, keep_ratio=0.02)
-    # rectified_img_filtered = cv2.medianBlur(rectified_img, 35)
-    rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 7)
+    img_, img_centroid_ = BCS_functions.load_image(img_path)
+    centroid_buffer = []
+    for i in range(NOISE_ITERATIONS):
+        img = img_.copy()
+        noise = np.zeros(img.shape, np.uint8)
+        cv2.randn(noise, GAUSSIAN_NOISE_MEAN, 2)
+        img = cv2.add(img, noise)
 
-    centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
+        # cv2.imshow("img", img)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        corners = BCS_functions.find_corner_candidates(img)
+        valid_corners = BCS_functions.valid_intersections(corners, img.shape)
+        rectified_img = BCS_functions.rectify_and_crop(img_centroid_, valid_corners)
+
+        rectified_img_filtered = img_filter_function(rectified_img)
+        noise_2 = np.zeros(rectified_img_filtered.shape, np.uint8)
+        cv2.randn(noise_2, GAUSSIAN_NOISE_MEAN, GAUSSIAN_NOISE_STDV * np.max(rectified_img_filtered))
+        rectified_img_filtered = cv2.add(rectified_img_filtered, noise_2)
+        rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 7)
+
+        centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
+        centroid_buffer.append(centroid_location)
+    centroid_location = np.mean(centroid_buffer, axis=0)
+    centroid_location_stdv = np.std(centroid_buffer, axis=0)
+
 
     if visualization:
         import matplotlib.pyplot as plt
@@ -28,10 +53,12 @@ def find_centroid_wrapper(img_path: str, visualization:bool = False) -> np.ndarr
         axs[0].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
         axs[0].set_title("Gamma corrected image")
         axs[0].axis('off')
+
+        # supertitle showing the standard deviation of the centroid
+        plt.suptitle(f"Centroid location: {centroid_location}, Stdv: {centroid_location_stdv}")
         plt.show()
 
     return centroid_location
-
 
 def tracking_error_finder(heliostat_position: np.ndarray, target_position: np.ndarray, center_measurements: np.ndarray):
     """
@@ -66,11 +93,24 @@ if __name__ == "__main__":
 
         # PSA data does not need corner finding
         if row["Source"] == "PSA":
-            _, img = BCS_functions.load_image(img_path)
-            img = cv2.resize(img, (1000, 1000))
-            
-            img_gamma = BCS_functions.gamma_correction(img, 2)
-            centroid_location = BCS_functions.find_centroid(img_gamma)
+            _, img_original = BCS_functions.load_image(img_path)
+
+            # Add noises to the image to get a probablistic distribution of the centroid
+            centroid_location_buffer = []
+            for i in range(NOISE_ITERATIONS):
+                img = img_original.copy()
+                noise = np.zeros(img.shape, np.uint8)
+                cv2.randn(noise, GAUSSIAN_NOISE_MEAN, GAUSSIAN_NOISE_STDV * np.max(img))
+                noise_resized = cv2.resize(noise, (1000, 1000))
+                img = cv2.resize(img, (1000, 1000))
+                img = img_filter_function(img)
+                img = cv2.add(img, noise_resized)
+                img_gamma = BCS_functions.gamma_correction(img, 2)
+                centroid_location = BCS_functions.find_centroid(img_gamma)
+                centroid_location_buffer.append(centroid_location)
+
+            centroid_location = np.mean(centroid_location_buffer, axis=0)
+            centroid_location_stdv = np.std(centroid_location_buffer, axis=0)
 
             if visualization:
                 import matplotlib.pyplot as plt
@@ -84,15 +124,32 @@ if __name__ == "__main__":
                 axs[1].set_title("Original image")
                 axs[1].axis('off')
 
+                # supertitle showing the standard deviation of the centroid
+                plt.suptitle(f"Centroid location: {centroid_location}, Stdv: {centroid_location_stdv}")
                 plt.show()
-        # Sandia data does not need borner finding, the excel sheet does not have targer width either
+                
+        # Sandia data does not need border finding, the excel sheet does not have targer width either
         elif row["Source"] == "Sandia":
-            _, img = BCS_functions.load_image(img_path)
-            img = cv2.resize(img, (1000, 1000))
-            img_low_pass = BCS_functions.low_pass_filter(img, keep_ratio=0.1)
-            # img_low_pass = cv2.medianBlur(img, 35)
-            img_gamma = BCS_functions.gamma_correction(img_low_pass, 2)
-            centroid_location = BCS_functions.find_centroid(img_gamma)
+            _, img_original = BCS_functions.load_image(img_path)
+
+            centroid_location_buffer = []
+            for i in range(NOISE_ITERATIONS):
+                img = img_original.copy()
+                noise = np.random.normal(GAUSSIAN_NOISE_MEAN, GAUSSIAN_NOISE_STDV * np.max(img), img.shape)
+                noise_resized = cv2.resize(noise, (1000, 1000))
+                img = cv2.resize(img, (1000, 1000))
+                img = img_filter_function(img)
+                img = np.clip(img.astype(np.int64) + noise_resized, 0, 255).astype(np.uint8)
+                img_gamma = BCS_functions.gamma_correction(img, 2)
+                centroid_location = BCS_functions.find_centroid(img_gamma)
+                centroid_location_buffer.append(centroid_location)
+
+            centroid_location = np.mean(centroid_location_buffer, axis=0)
+            centroid_location_stdv = np.std(centroid_location_buffer, axis=0)
+            # img = cv2.resize(img, (1000, 1000))
+            # img_low_pass = img_filter_function(img)
+            # img_gamma = BCS_functions.gamma_correction(img_low_pass, 2)
+            # centroid_location = BCS_functions.find_centroid(img_gamma)
 
              # TODO: Change this number, just made up since there's no data
             row["TargetW"] = 12
@@ -109,6 +166,9 @@ if __name__ == "__main__":
                 axs[1].scatter(centroid_location[0], centroid_location[1], c='r', s=20)
                 axs[1].set_title("Original image")
                 axs[1].axis('off')
+
+                # supertitle showing the standard deviation of the centroid
+                plt.suptitle(f"Centroid location: {centroid_location}, Stdv: {centroid_location_stdv}")
 
                 plt.show()
 
