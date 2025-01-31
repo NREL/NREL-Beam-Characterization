@@ -55,7 +55,7 @@ def find_centroid_wrapper(img_path: str, visualization:bool = False) -> np.ndarr
         axs[0].axis('off')
 
         # supertitle showing the standard deviation of the centroid
-        plt.suptitle(f"Centroid location: {centroid_location}, Stdv: {centroid_location_stdv}")
+        plt.suptitle(f"Centroid location: {centroid_location}, \nStdv: {centroid_location_stdv}")
         plt.show()
 
     return centroid_location
