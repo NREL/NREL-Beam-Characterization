@@ -96,7 +96,8 @@ def tracking_error_finder(heliostat_position: np.ndarray, target_position: np.nd
     cos_theta = np.dot(ideal_vector, measured_vector) / (np.linalg.norm(ideal_vector) * np.linalg.norm(measured_vector))
     theta = np.arccos(cos_theta)
 
-    return theta  
+    return theta 
+ 
 
 def tracking_error_with_uncertainties(heliostat_position: np.ndarray, target_position: np.ndarray, center_measurements: np.ndarray):
     """
