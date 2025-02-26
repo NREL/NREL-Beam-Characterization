@@ -4,13 +4,15 @@ import numpy as np
 import os
 from BCS_functions import BCS_functions
 import cv2
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Uncertainty have many sources
 # 1. Corners
 # 2. Camera position
 # 3. Target position
 # 4. Optical errors
-# 5. Resolution of cameras
+# 5. Resolution of cameras - 
 
 # img_filter_function = partial(BCS_functions.low_pass_filter, keep_ratio=0.02)     # Low fass filtering
 img_filter_function = partial(cv2.medianBlur, ksize=35)   
@@ -138,6 +140,7 @@ def tracking_error_with_uncertainties(heliostat_position: np.ndarray, target_pos
         Third tuple (vertical tracking error, uncertainty)
     """
     
+    # TODO: Verify that the heliostat position is the center of the heliostat, otherwise we may need to add correction
     ideal_vector = target_position - heliostat_position
 
     horizontal_angular_error_buffer = []
@@ -193,6 +196,88 @@ def tracking_error_with_uncertainties(heliostat_position: np.ndarray, target_pos
 
     return (average_combined_tracking_error, combined_error_uncertainty), (average_horizontal_tracking_error, horizontal_error_uncertainty), (average_vertical_tracking_error, vertical_error_uncertainty)
   
+
+def corner_uncertianty_sensitivity_plotter(img_path_, data_row_):
+    uncertainties = np.arange(0, 20, 1)
+    source_type = data_row_["Source"]
+
+    if source_type == "CENER":
+        row["HeliostatX"] = 0
+        row["HeliostatY"] = 0
+        row["HeliostatZ"] = 0
+
+        row["TargetX"] = 0
+        row["TargetY"] = 201
+        row["TargetZ"] = 9.975
+
+    elif source_type == "Sandia":
+        row["TargetW"] = 12
+
+    combined_error_mean_buffer = []
+    combined_error_std_buffer = []
+    horizontal_error_mean_buffer = []
+    horizontal_error_std_buffer = []
+    vertical_error_mean_buffer = []
+    vertical_error_std_buffer = []
+    for noise_magnitude in tqdm(uncertainties):
+        centroid_location_with_noisy_corners = centroid_location_with_corner_uncertianties(img_path_, source_type, uncertainties={"Corner stdv": noise_magnitude})
+
+        error_x_px = centroid_location_with_noisy_corners[:, 0] - 500
+        error_y_px = centroid_location_with_noisy_corners[:, 1] - 500
+        px_to_m_ratio = row["TargetW"] / 1000
+
+
+        heliostat_pos = np.array([row["HeliostatX"], row["HeliostatY"], row["HeliostatZ"]])
+        target_pos = np.array([row["TargetX"], row["TargetY"], row["TargetZ"]])
+        combined_tracking_error_distribution, horizontal_tracking_error_distribution, vertical_tracking_error_distribution \
+              = tracking_error_with_uncertainties(heliostat_pos, target_pos, centroid_location_with_noisy_corners)
+        
+        combined_error_mean_buffer.append(combined_tracking_error_distribution[0])
+        combined_error_std_buffer.append(combined_tracking_error_distribution[1])
+        horizontal_error_mean_buffer.append(horizontal_tracking_error_distribution[0])
+        horizontal_error_std_buffer.append(horizontal_tracking_error_distribution[1])
+        vertical_error_mean_buffer.append(vertical_tracking_error_distribution[0])
+        vertical_error_std_buffer.append(vertical_tracking_error_distribution[1])
+
+    # plot in two subplots
+    fig, ax = plt.subplots(3, 1, figsize=(10, 10))
+    ax[0].errorbar(uncertainties, combined_error_mean_buffer, yerr=combined_error_std_buffer, fmt='o', label="Combined error")
+    ax[0].set_title("Combined tracking error")
+    ax[0].set_xlabel("Corner standard deviation (pixels)")
+    ax[0].set_ylabel("Tracking error (radians)")
+
+    ax[1].errorbar(uncertainties, horizontal_error_mean_buffer, yerr=horizontal_error_std_buffer, fmt='o', label="Horizontal error")
+    ax[1].set_title("Horizontal tracking error")
+    ax[1].set_xlabel("Corner standard deviation (pixels)")
+    ax[1].set_ylabel("Tracking error (radians)")
+
+    ax[2].errorbar(uncertainties, vertical_error_mean_buffer, yerr=vertical_error_std_buffer, fmt='o', label="Vertical error")
+    ax[2].set_title("Vertical tracking error")
+    ax[2].set_xlabel("Corner standard deviation (pixels)")
+    ax[2].set_ylabel("Tracking error (radians)")
+    plt.show()
+
+
+    # another one just for variance
+    fig, ax = plt.subplots(3, 1, figsize=(10, 10))
+    ax[0].plot(uncertainties, combined_error_std_buffer, 'o', label="Combined error")
+    ax[0].set_title("Combined tracking error variance")
+    ax[0].set_xlabel("Corner standard deviation (pixels)")
+    ax[0].set_ylabel("Tracking error variance (radians)")
+
+    ax[1].plot(uncertainties, horizontal_error_std_buffer, 'o', label="Horizontal error")
+    ax[1].set_title("Horizontal tracking error variance")
+    ax[1].set_xlabel("Corner standard deviation (pixels)")
+    ax[1].set_ylabel("Tracking error variance (radians)")
+
+    ax[2].plot(uncertainties, vertical_error_std_buffer, 'o', label="Vertical error")
+    ax[2].set_title("Vertical tracking error variance")
+    ax[2].set_xlabel("Corner standard deviation (pixels)")
+    ax[2].set_ylabel("Tracking error variance (radians)")
+    plt.show()
+    
+    input("Press enter to continue")
+
         
 
 if __name__ == "__main__":
@@ -209,25 +294,34 @@ if __name__ == "__main__":
             print(f"Image {img_path} does not exist")
             continue
 
-        centroid_location_with_noisy_corners = centroid_location_with_corner_uncertianties(img_path, row["Source"], uncertainties={"Corner stdv": 10})
-        if row["Source"] == "Sandia":
-            row["TargetW"] = 12
-        elif row["Source"] == "CENER":
-            row["HeliostatX"] = 0
-            row["HeliostatY"] = 0
-            row["HeliostatZ"] = 0
+        corner_uncertianty_sensitivity_plotter(img_path, row)
 
-            row["TargetX"] = 0
-            row["TargetY"] = 201
-            row["TargetZ"] = 9.975
+        # centroid_location_with_noisy_corners = centroid_location_with_corner_uncertianties(img_path, row["Source"], uncertainties={"Corner stdv": 10}) 
+        # # The corner standard deviation is 10 pixels in the original image size
+        # if row["Source"] == "Sandia":
+        #     row["TargetW"] = 12
+        # elif row["Source"] == "CENER":
+        #     row["HeliostatX"] = 0
+        #     row["HeliostatY"] = 0
+        #     row["HeliostatZ"] = 0
 
-        error_x_px = centroid_location_with_noisy_corners[:, 0] - 500
-        error_y_px = centroid_location_with_noisy_corners[:, 1] - 500
-        px_to_m_ratio = row["TargetW"] / 1000
+        #     row["TargetX"] = 0
+        #     row["TargetY"] = 201
+        #     row["TargetZ"] = 9.975
+
+        # error_x_px = centroid_location_with_noisy_corners[:, 0] - 500
+        # error_y_px = centroid_location_with_noisy_corners[:, 1] - 500
+        # px_to_m_ratio = row["TargetW"] / 1000
 
 
-        heliostat_pos = np.array([row["HeliostatX"], row["HeliostatY"], row["HeliostatZ"]])
-        target_pos = np.array([row["TargetX"], row["TargetY"], row["TargetZ"]])
-        combined_tracking_error_distribution, horizontal_tracking_error_distribution, vertical_tracking_error_distribution \
-              = tracking_error_with_uncertainties(heliostat_pos, target_pos, centroid_location_with_noisy_corners)
+        # heliostat_pos = np.array([row["HeliostatX"], row["HeliostatY"], row["HeliostatZ"]])
+        # target_pos = np.array([row["TargetX"], row["TargetY"], row["TargetZ"]])
+        # combined_tracking_error_distribution, horizontal_tracking_error_distribution, vertical_tracking_error_distribution \
+        #       = tracking_error_with_uncertainties(heliostat_pos, target_pos, centroid_location_with_noisy_corners)
+        
+        # print(f"Image name: {row['ImageName']}, source: {row['Source']}")
+        # print(f"Combined tracking error: {combined_tracking_error_distribution[0]} +/- {combined_tracking_error_distribution[1]}")
+        # print(f"Horizontal tracking error: {horizontal_tracking_error_distribution[0]} +/- {horizontal_tracking_error_distribution[1]}")
+        # print(f"Vertical tracking error: {vertical_tracking_error_distribution[0]} +/- {vertical_tracking_error_distribution[1]}")
+        # print("")
         
