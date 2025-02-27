@@ -14,6 +14,8 @@ from tqdm import tqdm
 # 4. Optical errors
 # 5. Resolution of cameras - 
 
+VISUALIZATION = True
+
 # img_filter_function = partial(BCS_functions.low_pass_filter, keep_ratio=0.02)     # Low fass filtering
 img_filter_function = partial(cv2.medianBlur, ksize=35)   
 
@@ -34,6 +36,8 @@ def centroid_location_with_corner_uncertianties(img_path: str, source_name: str,
     corner_variance = uncertainties['Corner stdv']
     np.random.seed(42)
     mean = 0
+
+    # NOTE: If signle direction offset is desirable, then manually set these values
     corner_1_noise = np.random.normal(mean, corner_variance, (num_samples, 2))
     corner_2_noise = np.random.normal(mean, corner_variance, (num_samples, 2))
     corner_3_noise = np.random.normal(mean, corner_variance, (num_samples, 2))
@@ -43,10 +47,28 @@ def centroid_location_with_corner_uncertianties(img_path: str, source_name: str,
         corners = BCS_functions.find_corner_candidates(img)
         valid_corners = BCS_functions.valid_intersections(corners, img.shape)   # valid corners is a list of 4 tuples for corners
     else:
-        # For other sources, the corners are simply the 4 corners of the image
-        valid_corners = [(0, 0), (img.shape[1], 0), (img.shape[1], img.shape[0]), (0, img.shape[0])]
+        valid_corners = [(0, 0), (img.shape[1], 0), (0, img.shape[0]), (img.shape[1], img.shape[0])]
+    # do a corner finding without noise, for references
+    rectified_img = BCS_functions.rectify_and_crop(img_for_centroid_calculation_, valid_corners)
+    rectified_img_filtered = img_filter_function(rectified_img)
+    rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 7)
+    centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
+
+    # save the corner location and center location into a pandas dataframe
+    row_names = ['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right']
+    corner_identification_df = pd.DataFrame(valid_corners, columns=["X", "Y"], index=row_names)
+    corner_identification_df.loc['Center'] = centroid_location
+    storing_folder = os.path.join("Key_locations", source_name, os.path.splitext(os.path.basename(img_path))[0])
+    if not os.path.exists(storing_folder):
+        os.makedirs(storing_folder)
+    storing_full_name = os.path.join(storing_folder, "corner_identification.csv")
+    corner_identification_df.to_csv(storing_full_name)
+
+
 
     centroid_location_buffer = []
+    # for visualization
+    displayed = False
     for i in range(num_samples):
         noisy_corners = valid_corners.copy()
         noisy_corners[0] += corner_1_noise[i]
@@ -63,6 +85,16 @@ def centroid_location_with_corner_uncertianties(img_path: str, source_name: str,
         rectified_img_gamma_filtered = BCS_functions.gamma_correction(rectified_img_filtered, 7)
         centroid_location = BCS_functions.find_centroid(rectified_img_gamma_filtered)
         centroid_location_buffer.append(centroid_location)
+
+        if not displayed and VISUALIZATION:
+            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+            ax[0].imshow(rectified_img_filtered, cmap='gray')
+            ax[0].scatter(centroid_location[0], centroid_location[1], c='r', s=50)
+            ax[0].set_title("Rectified image with centroid")
+            ax[1].imshow(img_for_centroid_calculation_, cmap='gray')
+            ax[1].set_title("original image")
+            plt.show()
+            displayed = True
 
     centroid_location_buffer = np.array(centroid_location_buffer)
     return centroid_location_buffer
@@ -198,7 +230,8 @@ def tracking_error_with_uncertainties(heliostat_position: np.ndarray, target_pos
   
 
 def corner_uncertianty_sensitivity_plotter(img_path_, data_row_):
-    uncertainties = np.arange(0, 20, 1)
+    # uncertainties = np.arange(0, 20, 1)
+    uncertainties = [40]
     source_type = data_row_["Source"]
 
     if source_type == "CENER":
@@ -243,18 +276,20 @@ def corner_uncertianty_sensitivity_plotter(img_path_, data_row_):
     fig, ax = plt.subplots(3, 1, figsize=(10, 10))
     ax[0].errorbar(uncertainties, combined_error_mean_buffer, yerr=combined_error_std_buffer, fmt='o', label="Combined error")
     ax[0].set_title("Combined tracking error")
-    ax[0].set_xlabel("Corner standard deviation (pixels)")
-    ax[0].set_ylabel("Tracking error (radians)")
+    ax[0].set_xlabel("Corner variances (pixel)")
+    ax[0].set_ylabel("Tracking error (mrad)")
 
     ax[1].errorbar(uncertainties, horizontal_error_mean_buffer, yerr=horizontal_error_std_buffer, fmt='o', label="Horizontal error")
     ax[1].set_title("Horizontal tracking error")
-    ax[1].set_xlabel("Corner standard deviation (pixels)")
-    ax[1].set_ylabel("Tracking error (radians)")
+    ax[1].set_xlabel("Corner variances (pixel)")
+    ax[1].set_ylabel("Tracking error (mrad)")
 
     ax[2].errorbar(uncertainties, vertical_error_mean_buffer, yerr=vertical_error_std_buffer, fmt='o', label="Vertical error")
     ax[2].set_title("Vertical tracking error")
-    ax[2].set_xlabel("Corner standard deviation (pixels)")
-    ax[2].set_ylabel("Tracking error (radians)")
+    ax[2].set_xlabel("Corner variances (pixel)")
+    ax[2].set_ylabel("Tracking error (mrad)")
+
+    plt.tight_layout()
     plt.show()
 
 
@@ -275,8 +310,6 @@ def corner_uncertianty_sensitivity_plotter(img_path_, data_row_):
     ax[2].set_xlabel("Corner standard deviation (pixels)")
     ax[2].set_ylabel("Tracking error variance (radians)")
     plt.show()
-    
-    input("Press enter to continue")
 
         
 

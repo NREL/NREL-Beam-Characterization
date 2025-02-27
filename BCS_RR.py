@@ -4,13 +4,14 @@ import numpy as np
 import os
 from BCS_functions import BCS_functions
 import cv2
+import matplotlib.pyplot as plt
 
 GAUSSIAN_NOISE_MEAN = 0
 GAUSSIAN_NOISE_STDV = 0.05   # 5% of the max value
 NOISE_ITERATIONS = 10
 
-img_filter_function = partial(BCS_functions.low_pass_filter, keep_ratio=0.02)     # Low fass filtering
-# img_filter_function = partial(cv2.medianBlur, ksize=35)         # Median blue is used for median filter 
+# img_filter_function = partial(BCS_functions.low_pass_filter, keep_ratio=0.02)     # Low fass filtering
+img_filter_function = partial(cv2.medianBlur, ksize=35)         # Median blue is used for median filter 
 
 def find_centroid_wrapper(img_path: str, source_name: str, visualization:bool = False) -> np.ndarray:
     """

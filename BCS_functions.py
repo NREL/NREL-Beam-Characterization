@@ -124,6 +124,7 @@ class BCS_functions:
             bottom_right = max(bottom_positions, key=lambda pos: pos[0])
             
             return [top_left, top_right, bottom_left, bottom_right]
+            # return [top_left, top_right, bottom_right, bottom_left]
 
         valid_ints = []
         for i in intersection_candidate:
@@ -131,55 +132,56 @@ class BCS_functions:
                 valid_ints.append(i)
         return organize_positions(valid_ints)
     
-    @staticmethod
-    def rectify_and_crop(image, corners):
-        """
-        Rectify and crop the image using the given corners.
+    # @staticmethod
+    # def rectify_and_crop(image, corners):
+    #     """
+    #     Rectify and crop the image using the given corners.
         
-        Args:
-            image: The input image.
-            corners: A list of 4 tuples representing the corners (x, y).
+    #     Args:
+    #         image: The input image.
+    #         corners: A list of 4 tuples representing the corners (x, y).
         
-        Returns:
-            The rectified and cropped image.
-        """
-        # Get the image dimensions
-        height, width = image.shape[:2]
+    #     Returns:
+    #         The rectified and cropped image.
+    #     """
+    #     # Get the image dimensions
+    #     height, width = image.shape[:2]
         
-        # Clip the corners to be within the image boundaries
-        clipped_corners = []
-        for corner in corners:
-            x = max(0, min(corner[0], width - 1))
-            y = max(0, min(corner[1], height - 1))
-            clipped_corners.append((x, y))
+    #     # Clip the corners to be within the image boundaries
+    #     clipped_corners = []
+    #     for corner in corners:
+    #         x = max(0, min(corner[0], width - 1))
+    #         y = max(0, min(corner[1], height - 1))
+    #         clipped_corners.append((x, y))
         
-        # Define the destination points for the perspective transform
-        dst_points = np.array([
-            [0, 0],
-            [width - 1, 0],
-            [width - 1, height - 1],
-            [0, height - 1]
-        ], dtype=np.float32)
+    #     # Define the destination points for the perspective transform
+    #     dst_points = np.array([
+    #         [0, 0],
+    #         [width - 1, 0],
+    #         [0, height - 1],
+    #         [width - 1, height - 1]
+    #     ], dtype=np.float32)
         
-        # Convert the clipped corners to a numpy array
-        src_points = np.array(clipped_corners, dtype=np.float32)
+    #     # Convert the clipped corners to a numpy array
+    #     src_points = np.array(clipped_corners, dtype=np.float32)
         
-        # Compute the perspective transform matrix
-        M = cv2.getPerspectiveTransform(src_points, dst_points)
-        
-        # Apply the perspective transform to the image
-        rectified_image = cv2.warpPerspective(image, M, (width, height))
-        
-        return rectified_image
-    # def rectify_and_crop(unprocessed_im: np.ndarray, corners: list) -> np.ndarray:
-    #     img_output_size = 1000
-    #     dst_points = np.float32([[0, 0], [img_output_size, 0], [0, img_output_size], [img_output_size, img_output_size]])
-    #     src_points = np.float32(corners)
+    #     # Compute the perspective transform matrix
     #     M = cv2.getPerspectiveTransform(src_points, dst_points)
-    #     transformed_im = cv2.warpPerspective(unprocessed_im, M, (img_output_size, img_output_size))
-    #     croppedIm = transformed_im[0:img_output_size, 0:img_output_size]
+        
+    #     # Apply the perspective transform to the image
+    #     rectified_image = cv2.warpPerspective(image, M, (width, height))
+        
+    #     return rectified_image
+    def rectify_and_crop(unprocessed_im: np.ndarray, corners: list) -> np.ndarray:
+        # TODO: SANDIA has rectangular target
+        img_output_size = 1000
+        dst_points = np.float32([[0, 0], [img_output_size, 0], [0, img_output_size], [img_output_size, img_output_size]])
+        src_points = np.float32(corners)
+        M = cv2.getPerspectiveTransform(src_points, dst_points)
+        transformed_im = cv2.warpPerspective(unprocessed_im, M, (img_output_size, img_output_size))
+        croppedIm = transformed_im[0:img_output_size, 0:img_output_size]
 
-    #     return croppedIm
+        return croppedIm
     
     @staticmethod
     def low_pass_filter(image, keep_ratio):
