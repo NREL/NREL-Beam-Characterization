@@ -186,6 +186,8 @@ class BCS_functions:
     @staticmethod
     def low_pass_filter(image, keep_ratio):
         # Convert the image to grayscale if it is not already
+        original_dtype = image.dtype
+
         if len(image.shape) == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
@@ -217,7 +219,14 @@ class BCS_functions:
         img_back = np.fft.ifft2(f_ishift)
         img_back = np.abs(img_back)
 
-        img_back = (img_back / np.max(img_back) * 255).astype(np.uint8)
+        if original_dtype == np.uint8:
+            max_pixel_val = 155
+        elif original_dtype == np.uint16:
+            max_pixel_val = 65535
+        else:
+            raise ValueError("Unsupported image dtype")
+
+        img_back = (img_back / np.max(img_back) * max_pixel_val).astype(original_dtype)
         
         return img_back
     
@@ -234,8 +243,10 @@ class BCS_functions:
     
     @staticmethod
     def gamma_correction(img, gamma_val):
+        dtype = img.dtype
         img = np.power(img.astype(np.float64), gamma_val)
-        img = (img / np.max(img) * 255).astype(np.uint8)
+        max_pixel_val = 255 if dtype == np.uint8 else 65535
+        img = (img / np.max(img) * max_pixel_val).astype(dtype)
 
         return img
         
