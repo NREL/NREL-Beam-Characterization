@@ -230,11 +230,13 @@ def summarizing_results():
                                         df.loc["X", "Scaled Peak Flux"],
                                         df.loc["Y", "Scaled Peak Flux"]]
     result_summary_df = pd.DataFrame.from_dict(result_summary_dict, orient='index', columns=column_names)
-    
+    # save the summary dataframe to csv
+    summary_csv_file = os.path.join(result_folder, "beam_centers_summary.csv")
+    result_summary_df.to_csv(summary_csv_file)
         
             
 
 if __name__ == "__main__":
-    # main()
+    main()
     # print("Processing completed.")
     summarizing_results()
